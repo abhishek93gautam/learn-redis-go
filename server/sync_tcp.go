@@ -59,7 +59,7 @@ func RunSyncTCPServer() {
 		// blocking call: waiting for the new client to connect
 		c, err := lsnr.Accept()
 		if err != nil {
-			log.Println("err", err)
+			panic(err)
 		}
 
 		// increment the number of concurrent clients
