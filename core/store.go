@@ -1,6 +1,7 @@
 package core
 
 import (
+	"learn/redis/config"
 	"time"
 )
 
@@ -29,6 +30,9 @@ func NewObj(value interface{}, durationMs int64) *Obj {
 
 func Put(k string, obj *Obj) {
 	store[k] = obj
+	if len(store) >= config.KeysLimit {
+		evict()
+	}
 }
 
 func Get(k string) *Obj {
