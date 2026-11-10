@@ -13,15 +13,21 @@ import (
 	"learn/redis/core"
 )
 
-var con_clients int = 0
 var cronFrequency time.Duration = 1 * time.Second
 var lastCronExecTime time.Time = time.Now()
 
 const EngineStatus_WAITING int32 = 1 << 1
 const EngineStatus_BUSY int32 = 1 << 2
 const EngineStatus_SHUTTING_DOWN int32 = 1 << 3
+const EngineStatus_TRANSACTION int32 = 1 << 4
 
 var eStatus int32 = EngineStatus_WAITING
+
+var connectedClients map[int]*core.Client
+
+func init() {
+	connectedClients = make(map[int]*core.Client)
+}
 
 func WaitForSignal(wg *sync.WaitGroup, sigs chan os.Signal) {
 	defer wg.Done()
@@ -179,7 +185,7 @@ func RunAsyncTCPServer(wg *sync.WaitGroup) error {
 				}
 
 				// increase the number of concurrent clients count
-				con_clients++
+				connectedClients[connFD] = core.NewClient(connFD)
 				syscall.SetNonblock(serverFD, true)
 
 				// add this new TCP connection to be monitored
@@ -201,17 +207,21 @@ func RunAsyncTCPServer(wg *sync.WaitGroup) error {
 				if _, err := syscall.Kevent(kqFD, clientChange, nil, nil); err != nil {
 					log.Println("err", err)
 					syscall.Close(connFD)
-					con_clients--
+					// delete(connectedClients, connFD)
 					continue
 				}
 			} else {
 				// comm := core.FDComm{Fd: int(events[i].Fd)}
-				comm := core.FDComm{Fd: fd}
+				// comm := core.FDComm{Fd: fd}
+				comm := connectedClients[int(events[i].Ident)]
+				if comm == nil {
+					continue
+				}
 				cmds, err := readCommands(comm)
 				if err != nil {
 					// syscall.Close(int(events[i].Fd))
 					syscall.Close(fd)
-					con_clients -= 1
+					delete(connectedClients, int(events[i].Ident))
 					continue
 				}
 				respond(cmds, comm)
